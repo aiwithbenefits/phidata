@@ -1,4 +1,4 @@
-# Building Agents with gpt-4o
+# Building Agents with gpt-4o-mini
 
 This cookbook shows how to build agents with gpt-4o
 
