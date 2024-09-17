@@ -56,16 +56,3 @@ docker run -d \
   phidata/pgvector:16
 ```
 
-### 5. Run the App
-
-```shell
-streamlit run cookbook/agents/app.py
-```
-
-- Open [localhost:8501](http://localhost:8501) to view your LLM OS.
-
-### 6. Message on [discord](https://discord.gg/4MtYHHrgA8) if you have any questions
-
-### 7. Star ⭐️ the project if you like it.
-
-### Share with your friends: https://phidata.link/agents
