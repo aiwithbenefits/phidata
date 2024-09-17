@@ -19,16 +19,19 @@ from phi.assistant.python import PythonAssistant
 from phi.storage.assistant.postgres import PgAssistantStorage
 from phi.utils.log import logger
 from phi.vectordb.pgvector import PgVector2
+from firecrawler import FirecrawlTools
 
+EXA_API_KEY="49b94517-4ca5-490e-b643-f1f8c3065139"
+OPENAI_API_KEY="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"
+llm = OpenAIChat(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
 db_url = "postgresql+psycopg://ai:ai@localhost:5532/ai"
 cwd = Path(__file__).parent.resolve()
 scratch_dir = cwd.joinpath("scratch")
 if not scratch_dir.exists():
     scratch_dir.mkdir(exist_ok=True, parents=True)
 
-
 def get_agent(
-    llm_id: str = "gpt-4o",
+    llm_id: str = "gpt-4o-mini",
     calculator: bool = False,
     ddg_search: bool = False,
     file_tools: bool = False,
@@ -37,6 +40,7 @@ def get_agent(
     python_assistant: bool = False,
     research_assistant: bool = False,
     investment_assistant: bool = False,
+    firecrawl_tools: bool = False,
     user_id: Optional[str] = None,
     run_id: Optional[str] = None,
     debug_mode: bool = True,
@@ -70,13 +74,18 @@ def get_agent(
         extra_instructions.append(
             "You can use the `read_file` tool to read a file, `save_file` to save a file, and `list_files` to list files in the working directory."
         )
+    if firecrawl_tools:
+        tools.append(FirecrawlTools(api_key="fc-f4ef28bcf1e8440d84a0776ff5a859c8", scrape=True, crawl=True))
+        extra_instructions.append(
+            "You can use the `scrape_website` tool to scrape a single webpage and the `crawl_website` tool to crawl multiple pages of a website."
+        )
 
     # Add team members available to the Agent
     team: List[Assistant] = []
     if data_analyst:
         _data_analyst = DuckDbAssistant(
             name="Data Analyst",
-            llm=OpenAIChat(model=llm_id),
+            llm=llm,
             role="Analyze movie data and provide insights",
             semantic_model=json.dumps(
                 {
@@ -98,7 +107,7 @@ def get_agent(
     if python_assistant:
         _python_assistant = PythonAssistant(
             name="Python Assistant",
-            llm=OpenAIChat(model=llm_id),
+            llm=llm,
             role="Write and run python code",
             pip_install=True,
             charting_libraries=["streamlit"],
@@ -110,7 +119,7 @@ def get_agent(
         _research_assistant = Assistant(
             name="Research Assistant",
             role="Write a research report on a given topic",
-            llm=OpenAIChat(model=llm_id),
+            llm=llm,
             description="You are a Senior New York Times researcher tasked with writing a cover story research report.",
             instructions=[
                 "For a given topic, use the `search_exa` to get the top 10 search results.",
@@ -146,7 +155,6 @@ def get_agent(
             """
             ),
             tools=[ExaTools(num_results=5, text_length_limit=1000)],
-            # This setting tells the LLM to format messages in markdown
             markdown=True,
             add_datetime_to_instructions=True,
             debug_mode=debug_mode,
@@ -160,7 +168,7 @@ def get_agent(
         _investment_assistant = Assistant(
             name="Investment Assistant",
             role="Write a investment report on a given company (stock) symbol",
-            llm=OpenAIChat(model=llm_id),
+            llm=llm,
             description="You are a Senior Investment Analyst for Goldman Sachs tasked with writing an investment report for a very important client.",
             instructions=[
                 "For a given stock symbol, get the stock price, company information, analyst recommendations, and company news",
@@ -209,7 +217,6 @@ def get_agent(
             """
             ),
             tools=[YFinanceTools(stock_price=True, company_info=True, analyst_recommendations=True, company_news=True)],
-            # This setting tells the LLM to format messages in markdown
             markdown=True,
             add_datetime_to_instructions=True,
             debug_mode=debug_mode,
@@ -229,7 +236,7 @@ def get_agent(
         name="agent",
         run_id=run_id,
         user_id=user_id,
-        llm=OpenAIChat(model=llm_id),
+        llm=llm,
         description=dedent(
             """\
         You are a powerful AI Agent called `Optimus Prime v7`.
@@ -251,39 +258,27 @@ def get_agent(
             "Carefully read the information you have gathered and provide a clear and concise answer to the user.",
             "Do not use phrases like 'based on my knowledge' or 'depending on the information'.",
             "You can delegate tasks to an AI Assistant in your team depending of their role and the tools available to them.",
+            "If you need to scrape or crawl a website, use the Firecrawl tools available to you.",
         ],
         extra_instructions=extra_instructions,
-        # Add long-term memory to the Agent backed by a PostgreSQL database
         storage=PgAssistantStorage(table_name="agent_runs", db_url=db_url),
-        # Add a knowledge base to the Agent
         knowledge_base=AssistantKnowledge(
             vector_db=PgVector2(
                 db_url=db_url,
                 collection="agent_documents",
                 embedder=OpenAIEmbedder(model="text-embedding-3-small", dimensions=1536),
             ),
-            # 3 references are added to the prompt when searching the knowledge base
             num_documents=3,
         ),
-        # Add selected tools to the Agent
         tools=tools,
-        # Add selected team members to the Agent
         team=team,
-        # Show tool calls in the chat
         show_tool_calls=True,
-        # This setting gives the LLM a tool to search the knowledge base for information
         search_knowledge=True,
-        # This setting gives the LLM a tool to get chat history
         read_chat_history=True,
-        # This setting adds chat history to the messages
         add_chat_history_to_messages=True,
-        # This setting adds 4 previous messages from chat history to the messages sent to the LLM
         num_history_messages=4,
-        # This setting tells the LLM to format messages in markdown
         markdown=True,
-        # This setting adds the current datetime to the instructions
         add_datetime_to_instructions=True,
-        # Add an introductory Assistant message
         introduction=dedent(
             """\
         Hi, I'm Optimus Prime v7, your powerful AI Assistant. Send me on my mission boss :statue_of_liberty:\
