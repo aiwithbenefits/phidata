@@ -8,7 +8,6 @@ phidata
 psycopg[binary]
 pypdf
 sqlalchemy
-streamlit
 yfinance
 duckdb
 pandas
